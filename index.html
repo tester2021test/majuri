@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#172033"><meta name="description" content="Majuri Pro V2 offline interior work and payment manager">
-<title>Majuri Pro V3.0 · Google Cloud</title>
+<title>Majuri Pro V3.4 · Project Workspace</title>
 <style>
 :root{--bg:#eef2fa;--card:#fff;--ink:#18243b;--muted:#68758b;--line:#e1e7f2;--accent:#405cf5;--soft:#e9edff;--good:#07865f;--warn:#b66b08;--bad:#d33b50;--shadow:0 8px 26px #253b6812;--cyan:#0d9bb5;--purple:#8755d9;--orange:#ed8b32}
 [data-theme=dark]{--bg:#0d1422;--card:#172338;--ink:#f0f4ff;--muted:#a8b5ca;--line:#2a3a55;--accent:#91a5ff;--soft:#273656;--good:#55d6aa;--warn:#ffca75;--bad:#ff8795;--shadow:0 8px 26px #0004;--cyan:#4bc4db;--purple:#b18bff;--orange:#ffb36c}
@@ -58,6 +58,117 @@ input,select,textarea{border-radius:13px}
 #cloudBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:var(--soft);border-bottom:1px solid var(--line);font-size:12px}
 #cloudStatus{font-weight:700}body:not(.authenticated) header,body:not(.authenticated) #cloudBar,body:not(.authenticated) .wrap,body:not(.authenticated) .bottom,body:not(.authenticated) .fab{display:none!important}
 body.authenticated #loginPanel{display:none}
+
+/* Majuri Pro v3.4 — usability and visual refresh (presentation-only layer) */
+:root{
+ --bg:#f4f6fb;--card:#ffffff;--ink:#17233b;--muted:#68758b;--line:#e3e8f1;
+ --accent:#3157d5;--soft:#eaf0ff;--good:#087b59;--warn:#a65d06;--bad:#c6384b;
+ --shadow:0 10px 30px rgba(27,45,85,.07);--cyan:#078ca4;--purple:#7650c8;--orange:#d87921
+}
+[data-theme=dark]{
+ --bg:#0c1423;--card:#141f32;--ink:#edf2ff;--muted:#a7b4ca;--line:#293850;
+ --accent:#91a9ff;--soft:#202f4c;--good:#58d6a8;--warn:#ffca79;--bad:#ff8797;
+ --shadow:0 10px 30px rgba(0,0,0,.22);--cyan:#52c9dc;--purple:#b79aff;--orange:#ffb46d
+}
+html{scroll-behavior:smooth}
+body{font-size:15px;line-height:1.48;padding-bottom:100px;background:
+ radial-gradient(ellipse at 6% -5%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 34%),
+ radial-gradient(ellipse at 95% 8%,color-mix(in srgb,var(--purple) 7%,transparent),transparent 28%),var(--bg)}
+header{min-height:76px;padding:14px clamp(14px,3vw,30px);background:linear-gradient(112deg,#142746 0%,#244b9d 55%,#5542a6 100%);box-shadow:0 8px 28px #14274622}
+header h1{font-size:18px;font-weight:850;letter-spacing:.8px}
+header small{font-size:11px;letter-spacing:.25px;color:#dce6ff}
+header .pill{font-size:10px;vertical-align:middle;margin-left:5px;background:#ffffff20;border:1px solid #ffffff35;color:#fff}
+header .secondary{border:1px solid #ffffff38;background:#ffffff16;color:white}
+#cloudBar{position:sticky;top:76px;z-index:9;padding:9px clamp(14px,3vw,30px);background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(14px);font-size:12px;gap:9px 16px}
+#cloudBar span{overflow-wrap:anywhere}
+#cloudStatus{display:inline-flex;align-items:center;gap:5px}
+.wrap{max-width:1180px;padding:20px clamp(13px,2vw,26px) 34px}
+.page> .row:first-child{margin:5px 2px 17px;align-items:center;gap:12px}
+h2{font-size:clamp(20px,2.3vw,25px);font-weight:820;letter-spacing:-.65px;margin:4px 0 13px}
+h3{font-size:15px;font-weight:780;letter-spacing:-.2px}
+.card{padding:clamp(15px,2vw,21px);margin:13px 0;border-radius:19px;border:1px solid var(--line);box-shadow:var(--shadow)}
+.card .card{box-shadow:none;background:color-mix(in srgb,var(--bg) 72%,var(--card));border-color:var(--line)}
+.grid{gap:11px}
+.grid3{gap:9px}
+.stat{padding:15px;border-radius:16px;background:linear-gradient(145deg,var(--card),color-mix(in srgb,var(--soft) 55%,var(--card)));border:1px solid var(--line)}
+.stat .hint{font-size:11px;font-weight:650;letter-spacing:.1px}
+.stat .big{font-variant-numeric:tabular-nums;letter-spacing:-.65px}
+label{font-size:12px;font-weight:700;letter-spacing:.1px;margin:12px 0 5px}
+input,select,textarea{min-height:44px;padding:11px 12px;border:1px solid color-mix(in srgb,var(--muted) 27%,var(--line));border-radius:12px;background:var(--card);transition:border-color .15s,box-shadow .15s}
+textarea{min-height:88px}
+input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--muted) 78%,transparent)}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,.filebtn:focus-visible,summary:focus-visible{
+ outline:3px solid color-mix(in srgb,var(--accent) 42%,transparent);outline-offset:2px;border-color:var(--accent)
+}
+button,.filebtn{min-height:42px;border-radius:12px;padding:10px 15px;font-weight:750;letter-spacing:.05px;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 76%,var(--purple)));box-shadow:0 5px 13px color-mix(in srgb,var(--accent) 18%,transparent)}
+button:active{transform:translateY(1px) scale(.985)}
+button.secondary{background:var(--soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 14%,var(--line));box-shadow:none}
+button.danger{background:color-mix(in srgb,var(--bad) 11%,var(--card));color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 20%,var(--line));box-shadow:none}
+button.small{min-height:34px;padding:7px 10px;font-size:12px}
+.actions{gap:9px}
+.pill{border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.35px}
+.notice{padding:13px 15px;border-radius:14px;line-height:1.55}
+.item{padding:14px 3px}
+.tablewrap{border:1px solid var(--line);border-radius:13px}
+table{font-size:13px}
+th{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.35px;background:var(--bg)}
+td,th{padding:11px 9px}
+.room-card{border-top:0;position:relative}
+.room-card:before{content:"";display:block;height:4px;position:absolute;top:0;left:0;right:0;background:linear-gradient(90deg,var(--cyan),var(--accent),var(--purple))}
+.room-card img{height:130px;border-radius:12px}
+.empty{padding:32px 12px;line-height:1.6}
+.bottom{padding:8px 7px calc(8px + env(safe-area-inset-bottom));gap:3px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(18px);box-shadow:0 -8px 25px rgba(20,35,65,.08)}
+.bottom button{min-height:54px;padding:6px 2px;font-size:10px;font-weight:750;gap:4px;border:1px solid transparent;box-shadow:none}
+.bottom button .ico{font-size:20px;line-height:22px}
+.bottom button.active{background:var(--soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 15%,var(--line))}
+.fab{right:17px;bottom:calc(88px + env(safe-area-inset-bottom));width:56px;height:56px;min-height:56px;font-size:26px;border:3px solid var(--card);box-shadow:0 9px 24px color-mix(in srgb,var(--accent) 35%,transparent)}
+#appToast{bottom:calc(94px + env(safe-area-inset-bottom));line-height:1.4}
+#actionOverlay{padding:18px}
+.action-dialog{max-height:min(85vh,680px);overflow:auto}
+#loginPanel{margin:clamp(28px,8vh,76px) auto 30px}
+@media(min-width:900px){
+ body{padding-bottom:24px}
+ header{padding-left:252px}
+ #cloudBar{padding-left:252px;top:76px}
+ .bottom{position:fixed;top:76px;bottom:0;left:0;right:auto;width:226px;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:20px 13px 24px;border-top:0;border-right:1px solid var(--line);box-shadow:8px 0 24px rgba(20,35,65,.04);backdrop-filter:blur(16px);gap:6px}
+ .bottom:before{content:"WORKSPACE";display:block;padding:7px 12px 11px;color:var(--muted);font-size:10px;font-weight:850;letter-spacing:1.3px}
+ .bottom button{width:100%;min-height:48px;flex-direction:row;justify-content:flex-start;gap:13px;padding:10px 13px;font-size:13px;text-align:left;border-radius:12px}
+ .bottom button .ico{width:24px;font-size:19px;text-align:center}
+ .bottom button.active{background:var(--soft);box-shadow:inset 3px 0 0 var(--accent);border-color:transparent}
+ .wrap{margin-left:226px;max-width:calc(1180px + 226px);padding:24px clamp(22px,3vw,44px) 40px}
+ .fab{right:32px;bottom:30px}
+ #appToast{bottom:26px}
+}
+@media(min-width:1250px){
+ .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .room-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:520px){
+ body{font-size:14px}
+ header{min-height:68px;padding:12px 14px}
+ header h1{font-size:16px}
+ #cloudBar{top:68px;padding:8px 13px;font-size:11px}
+ .wrap{padding:14px 11px 26px}
+ .card{padding:14px;margin:10px 0;border-radius:17px}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .grid3{gap:7px}
+ .stat{padding:11px}
+ .stat .big{font-size:clamp(16px,5vw,21px)}
+ .bottom{grid-template-columns:repeat(6,minmax(0,1fr))}
+ .bottom button{font-size:9px}
+ .bottom button .ico{font-size:18px}
+ .fab{width:52px;height:52px;min-height:52px;right:13px}
+ .measure-row{grid-template-columns:1fr 1fr;gap:7px}
+ .measure-row button{grid-column:span 2}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+@media print{
+ body{background:white!important}
+ .card{break-inside:avoid}
+}
+
 </style></head>
 <body>
 <section id="loginPanel" aria-label="Majuri Pro secure sign in">
@@ -70,7 +181,7 @@ body.authenticated #loginPanel{display:none}
  <div class="secure-note"><span>🔒</span><span>Private account access. Only the approved account can access its own project records.</span></div>
  <div class="creator">CREATED &amp; CRAFTED BY <strong>VIVEK NARKHEDE</strong></div>
 </section>
-<header><div><h1>MAJURI PRO <span class="pill">V2.9</span></h1><small id="projectSubtitle">Created &amp; Crafted by Vivek Narkhede</small></div><button class="secondary small" onclick="toggleTheme()" id="themeBtn">☾ Theme</button></header>
+<header><div><h1>MAJURI PRO <span class="pill">V3.4</span></h1><small id="projectSubtitle">Created &amp; Crafted by Vivek Narkhede</small></div><button class="secondary small" onclick="toggleTheme()" id="themeBtn">☾ Theme</button></header>
 <div id="cloudBar"><span>Account: <b id="accountEmail">—</b></span><span>Sync: <b id="cloudStatus">Not connected</b></span><button class="secondary small" id="syncNowBtn" type="button">Sync now</button><button class="secondary small" id="logoutBtn" type="button">Sign out</button></div>
 <div class="wrap">
 <section id="home" class="page active">
@@ -82,7 +193,7 @@ body.authenticated #loginPanel{display:none}
 <div class="card"><div class="row between"><h3>Room-wise majuri</h3><span class="hint">Tap Rooms for details</span></div><div id="roomChart"></div></div>
 <div class="card"><div class="row between"><h3>My project money tracker</h3><button class="secondary small" onclick="go('analytics')">Full report →</button></div><div class="grid"><div class="stat"><div class="hint">Total project cost incurred</div><b id="homeCost">₹0</b></div><div class="stat"><div class="hint">Cash actually spent</div><b id="homeCashOut">₹0</b></div><div class="stat"><div class="hint">Still payable</div><b id="homePayable">₹0</b></div><div class="stat"><div class="hint">Budget remaining</div><b id="homeBudgetLeft">Not set</b></div></div></div>
 <div class="card"><div class="row between"><h3>Recent payments</h3><button class="secondary small" onclick="go('payments')">View all</button></div><div id="recentPayments"></div></div>
-<div class="notice">Offline-first: records save on this device first and sync to your private Google account when online. Photos remain on this device. Export a JSON backup regularly.</div>
+<div class="notice">Cloud-connected workspace: changes sync automatically when online. Local device storage is retained as a safety buffer. Records save on this device first and sync to your private Google account when online. Photos remain on this device. Export a JSON backup regularly.</div>
 </section>
 <section id="rooms" class="page">
 <div class="row between"><h2>Rooms & work</h2><button onclick="openWork()">＋ Add work</button></div>
@@ -165,7 +276,7 @@ body.authenticated #loginPanel{display:none}
 </div>
 <div class="hint no-print" style="text-align:center;padding:8px 12px 18px">Created &amp; Crafted by <strong>Vivek Narkhede</strong></div>
 <button class="fab no-print" onclick="openWork()" title="Add work">＋</button>
-<nav class="bottom no-print" id="nav"><button class="active" data-page="home"><span class="ico">⌂</span>Home</button><button data-page="rooms"><span class="ico">▦</span>Rooms</button><button data-page="calc"><span class="ico">⌗</span>Calculate</button><button data-page="payments"><span class="ico">₹</span>Payments</button><button data-page="analytics"><span class="ico">▥</span>Analytics</button><button data-page="more"><span class="ico">•••</span>More</button></nav>
+<nav class="bottom no-print" id="nav" aria-label="Main navigation"><button class="active" data-page="home"><span class="ico">⌂</span>Home</button><button data-page="rooms"><span class="ico">▦</span>Rooms</button><button data-page="calc"><span class="ico">⌗</span>Calculate</button><button data-page="payments"><span class="ico">₹</span>Payments</button><button data-page="analytics"><span class="ico">▥</span>Analytics</button><button data-page="more"><span class="ico">•••</span>More</button></nav>
 <script>
 const DB='MajuriProDB';let db,state={project:{name:'My Interior Project',customer:'',site:'',phone:'',date:'',notes:''},rooms:['Living Room','Bedroom','Master Bedroom','Kitchen','Safety Door & Shoe Rack Area','Passage','Bathroom','Balcony'],types:['Wardrobe','Loft','Bed','Hydraulic Bed','TV Unit','AC Pelmet','Dressing Unit','Study Table','Kitchen Base Cabinet','Kitchen Overhead Cabinet','Tall Unit','Shoe Rack','Crockery Unit','Wall Panelling','Headboard','Side Table','Mandir Unit','Display Unit','Custom Work'],rates:{},works:[],contractors:[],payments:[],expenses:[],clientReceipts:[],budget:0,history:[],legacyProjects:[]};
 const $=id=>document.getElementById(id),uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7),today=()=>new Date().toISOString().slice(0,10),money=n=>'₹'+(Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2}),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
