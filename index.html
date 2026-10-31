@@ -175,9 +175,65 @@ let cloudUser=null, cloudApi=null, cloudRevision=0, cloudBusy=false, cloudDirty=
 function persistLocal(){return new Promise((res,rej)=>{let t=db.transaction('app','readwrite');let key=cloudUser?`user:${cloudUser.uid}:main`:'main';t.objectStore('app').put({id:key,data:state,activeProject:'single',pendingSync:!!cloudDirty,cloudRevision:Number(cloudRevision||0)});t.oncomplete=res;t.onerror=()=>rej(t.error)})}
 async function persist(){if(cloudUser&&!suppressCloudSync){cloudDirty=true;localChangeVersion++;setCloudStatus('Sync pending')}await persistLocal();if(cloudUser&&!suppressCloudSync)scheduleCloudSync()}
 function setCloudStatus(s){let el=$('cloudStatus');if(el)el.textContent=s}
-function scheduleCloudSync(){clearTimeout(cloudTimer);cloudTimer=setTimeout(()=>syncCloud(),1200)}
-async function syncCloud(){if(!cloudUser||!cloudApi||cloudBusy||!cloudDirty||cloudConflict)return;cloudBusy=true;let savingVersion=localChangeVersion;let snapshot=structuredClone(state);try{setCloudStatus('Syncing…');let next=await cloudApi.saveCloudState(cloudUser,snapshot,cloudRevision);cloudRevision=next;cloudConflict=false;cloudDirty=localChangeVersion!==savingVersion;await persistLocal();if(cloudDirty){setCloudStatus('More changes pending');scheduleCloudSync()}else setCloudStatus('Synced ✓')}catch(e){if(String(e.message||e).includes('CLOUD_CONFLICT')){cloudConflict=true;setCloudStatus('Conflict — reload cloud data');showToast('Another device changed the data. Use Reload cloud before editing further.')}else{setCloudStatus('Sync failed — local data safe');showToast('Cloud sync failed. Your local changes are retained.')}}finally{cloudBusy=false}}
-async function reloadCloud(force=false){if(!cloudUser||!cloudApi)return;try{setCloudStatus('Loading cloud…');let r=await cloudApi.loadCloudState(cloudUser);if(cloudDirty&&!force){setCloudStatus('Local changes pending');await syncCloud();return}if(cloudDirty&&force&&!confirm('Replace local changes with cloud data? Export a JSON backup manually first if you need to keep them. Continue?'))return;if(r.state){if(state.works.length||state.payments.length||state.expenses.length||state.contractors.length){showToast('Loading cloud data. Use Export backup if you want a manual copy of local data.')}state=validateCloudState(r.state);cloudRevision=r.revision;cloudDirty=false;cloudConflict=false;await persistLocal();renderAll();setCloudStatus('Synced ✓');showToast('Cloud data loaded')}else if(!r.state&&!cloudDirty){cloudRevision=0;cloudDirty=true;await syncCloud()}}catch(e){setCloudStatus('Cloud load failed — local data safe');showToast(e.message||'Could not load cloud data')}}
+function scheduleCloudSync(){clearTimeout(cloudTimer);cloudTimer=setTimeout(()=>syncCloud(),0)}
+function mergeCloudStates(remote,local,localWins=false){
+ const merged={...remote,...local,project:localWins?{...(remote.project||{}),...(local.project||{})}:{...(local.project||{}),...(remote.project||{})}};
+ for(const key of ['works','contractors','payments','expenses','clientReceipts']){
+  const map=new Map();
+  for(const item of (remote[key]||[]))map.set(item.id||JSON.stringify(item),item);
+  for(const item of (local[key]||[])){const id=item.id||JSON.stringify(item);if(localWins||!map.has(id))map.set(id,item)}
+  merged[key]=Array.from(map.values());
+ }
+ for(const key of ['rooms','types'])merged[key]=Array.from(new Set([...(remote[key]||[]),...(local[key]||[])]));
+ merged.rates={...(remote.rates||{}),...(localWins?(local.rates||{}):(local.rates||{}))};
+ const history=new Map();for(const h of [...(remote.history||[]),...(local.history||[])])history.set(`${h.date||''}|${h.action||''}|${h.detail||''}`,h);merged.history=Array.from(history.values()).slice(-500);
+ return merged;
+}
+async function syncCloud(){
+ if(!cloudUser||!cloudApi||cloudBusy||!cloudDirty)return;
+ cloudBusy=true;let failed=false;
+ try{
+  setCloudStatus('Syncing…');
+  for(let attempt=0;attempt<4&&cloudDirty;attempt++){
+   const savingVersion=localChangeVersion;
+   const snapshot=structuredClone(state);
+   try{
+    const next=await cloudApi.saveCloudState(cloudUser,snapshot,cloudRevision);
+    cloudRevision=next;cloudConflict=false;cloudDirty=localChangeVersion!==savingVersion;await persistLocal();
+    if(!cloudDirty){setCloudStatus('Synced ✓');return}
+   }catch(e){
+    if(!String(e.message||e).includes('CLOUD_CONFLICT'))throw e;
+    setCloudStatus('Merging changes…');
+    const latest=await cloudApi.loadCloudState(cloudUser);
+    if(!latest.state){cloudRevision=0;continue}
+    state=validateCloudState(mergeCloudStates(latest.state,state,true));
+    cloudRevision=latest.revision;cloudConflict=false;cloudDirty=true;localChangeVersion++;
+    await persistLocal();renderAll();
+   }
+  }
+  if(cloudDirty){setCloudStatus('Sync pending — retrying');scheduleCloudSync()}
+ }catch(e){failed=true;cloudConflict=false;setCloudStatus('Offline / sync retry pending');showToast('Cloud sync is pending. Your data is saved on this device and will retry when connection is available.')}
+ finally{cloudBusy=false;if(cloudDirty&&navigator.onLine){if(failed)setTimeout(()=>syncCloud(),5000);else scheduleCloudSync()}}
+}
+async function reloadCloud(){
+ if(!cloudUser||!cloudApi)return;
+ try{
+  setCloudStatus('Loading cloud…');
+  const r=await cloudApi.loadCloudState(cloudUser);
+  if(r.state){
+   const localState=structuredClone(state);
+   const hadLocal=localState.works.length||localState.payments.length||localState.expenses.length||localState.contractors.length||localState.clientReceipts.length;
+   state=validateCloudState(mergeCloudStates(r.state,localState,cloudDirty));
+   cloudRevision=r.revision;cloudConflict=false;
+   const hasLocalOnly=['works','contractors','payments','expenses','clientReceipts'].some(k=>(localState[k]||[]).some(x=>!(r.state[k]||[]).some(y=>y.id===x.id)));
+   if(cloudDirty||hasLocalOnly){cloudDirty=true;localChangeVersion++;await persistLocal();renderAll();scheduleCloudSync();setCloudStatus('Merging & syncing…')}
+   else{cloudDirty=false;await persistLocal();renderAll();setCloudStatus('Synced ✓')}
+   if(hadLocal)showToast('Local and cloud records checked; syncing any local-only records.');
+  }else{
+   cloudRevision=0;cloudDirty=true;localChangeVersion++;await persistLocal();await syncCloud();
+  }
+ }catch(e){setCloudStatus('Cloud load failed — local data safe');showToast(e.message||'Could not load cloud data')}
+}
 function validateCloudState(d){if(!d||typeof d!=='object'||!Array.isArray(d.works)||!Array.isArray(d.contractors)||!Array.isArray(d.payments)||!Array.isArray(d.expenses))throw new Error('Cloud data format is invalid. Local data was not replaced.');return {...state,...d,project:{...state.project,...(d.project||{})},rooms:Array.isArray(d.rooms)?d.rooms:state.rooms,types:Array.isArray(d.types)?d.types:state.types,history:Array.isArray(d.history)?d.history:[]}}
 
 function normalizeWork(w){if(w.measurements?.length)return w;return {...w,measurements:[{id:uid(),width:+w.width||0,height:+w.height||0,widthUnit:'ft',heightUnit:'ft',rate:+w.rate||0}],deduct:0,override:'',qty:+w.qty||1,photos:w.photos||[]}}
@@ -356,14 +412,14 @@ $('googleLoginBtn').addEventListener('click',performGoogleLogin);
 async function bootCloud(){
  try{
   cloudApi=await import('data:text/javascript;base64,LyogTWFqdXJpIFBybyBjbG91ZCBhZGFwdGVyLiBGaXJlYmFzZSBXZWIgU0RLIHYxMS4xMC4wLCBtb2R1bGFyIENETiBpbXBvcnRzLiAqLwppbXBvcnQgeyBpbml0aWFsaXplQXBwLCBnZXRBcHAsIGdldEFwcHMgfSBmcm9tICdodHRwczovL3d3dy5nc3RhdGljLmNvbS9maXJlYmFzZWpzLzExLjEwLjAvZmlyZWJhc2UtYXBwLmpzJzsKaW1wb3J0IHsgZ2V0QXV0aCwgR29vZ2xlQXV0aFByb3ZpZGVyLCBzaWduSW5XaXRoUG9wdXAsIHNpZ25PdXQsIG9uQXV0aFN0YXRlQ2hhbmdlZCB9IGZyb20gJ2h0dHBzOi8vd3d3LmdzdGF0aWMuY29tL2ZpcmViYXNlanMvMTEuMTAuMC9maXJlYmFzZS1hdXRoLmpzJzsKaW1wb3J0IHsgZ2V0RmlyZXN0b3JlLCBkb2MsIGdldERvYywgcnVuVHJhbnNhY3Rpb24sIHNlcnZlclRpbWVzdGFtcCB9IGZyb20gJ2h0dHBzOi8vd3d3LmdzdGF0aWMuY29tL2ZpcmViYXNlanMvMTEuMTAuMC9maXJlYmFzZS1maXJlc3RvcmUuanMnOwpjb25zdCBmaXJlYmFzZUNvbmZpZyA9IHsKICBhcGlLZXk6ICJBSXphU3lBcUYzYzh6eVlPQUdZUnc3UEt1ZWlpMzNjRkF0bVR4WTAiLAogIGF1dGhEb21haW46ICJtYWp1cmktcHJvLmZpcmViYXNlYXBwLmNvbSIsCiAgcHJvamVjdElkOiAibWFqdXJpLXBybyIsCiAgc3RvcmFnZUJ1Y2tldDogIm1hanVyaS1wcm8uZmlyZWJhc2VzdG9yYWdlLmFwcCIsCiAgbWVzc2FnaW5nU2VuZGVySWQ6ICIzNDkyOTg0NjIwNDgiLAogIGFwcElkOiAiMTozNDkyOTg0NjIwNDg6d2ViOjUwN2FkY2YwZTgzMWRhMjRjMGUyMDUiCn07CmNvbnN0IGFsbG93ZWRFbWFpbHMgPSBbInZpdmVrZG4yNTA0QGdtYWlsLmNvbSJdOwoKY29uc3QgYXBwID0gZ2V0QXBwcygpLmxlbmd0aCA/IGdldEFwcCgpIDogaW5pdGlhbGl6ZUFwcChmaXJlYmFzZUNvbmZpZyk7CmNvbnN0IGF1dGggPSBnZXRBdXRoKGFwcCk7CmNvbnN0IGRiID0gZ2V0RmlyZXN0b3JlKGFwcCk7CmNvbnN0IHByb3ZpZGVyID0gbmV3IEdvb2dsZUF1dGhQcm92aWRlcigpOwpwcm92aWRlci5zZXRDdXN0b21QYXJhbWV0ZXJzKHsgcHJvbXB0OiAnc2VsZWN0X2FjY291bnQnIH0pOwpjb25zdCBhbGxvd2VkID0gbmV3IFNldChhbGxvd2VkRW1haWxzLm1hcCh4ID0+IFN0cmluZyh4KS50cmltKCkudG9Mb3dlckNhc2UoKSkpOwoKZnVuY3Rpb24gYXNzZXJ0QWxsb3dlZCh1c2VyKSB7CiAgY29uc3QgZW1haWwgPSBTdHJpbmcodXNlcj8uZW1haWwgfHwgJycpLnRvTG93ZXJDYXNlKCk7CiAgaWYgKCF1c2VyIHx8ICF1c2VyLmVtYWlsVmVyaWZpZWQgfHwgIWFsbG93ZWQuaGFzKGVtYWlsKSkgewogICAgdGhyb3cgbmV3IEVycm9yKCdUaGlzIEdvb2dsZSBhY2NvdW50IGlzIG5vdCBhcHByb3ZlZCBmb3IgTWFqdXJpIFByby4nKTsKICB9CiAgcmV0dXJuIHVzZXI7Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBsb2dpbldpdGhHb29nbGUoKSB7CiAgLy8gSW52b2tlIHRoZSBwb3B1cCBpbW1lZGlhdGVseSBmcm9tIHRoZSB1c2VyJ3MgY2xpY2sgZ2VzdHVyZS4gRG8gbm90IGF3YWl0CiAgLy8gbmV0d29yay9zZXR1cCB3b3JrIGJlZm9yZSBjYWxsaW5nIHRoaXMgZnVuY3Rpb24gaW4gdGhlIHBhZ2UgY2xpY2sgaGFuZGxlci4KICBjb25zdCByZXN1bHQgPSBhd2FpdCBzaWduSW5XaXRoUG9wdXAoYXV0aCwgcHJvdmlkZXIpOwogIHRyeSB7IHJldHVybiBhc3NlcnRBbGxvd2VkKHJlc3VsdC51c2VyKTsgfQogIGNhdGNoIChlcnJvcikgeyBhd2FpdCBzaWduT3V0KGF1dGgpOyB0aHJvdyBlcnJvcjsgfQp9CmV4cG9ydCBmdW5jdGlvbiBsb2dvdXQoKSB7IHJldHVybiBzaWduT3V0KGF1dGgpOyB9CmV4cG9ydCBmdW5jdGlvbiB3YXRjaExvZ2luKGNhbGxiYWNrKSB7CiAgcmV0dXJuIG9uQXV0aFN0YXRlQ2hhbmdlZChhdXRoLCB1c2VyID0+IHsKICAgIGlmICghdXNlcikgcmV0dXJuIGNhbGxiYWNrKG51bGwpOwogICAgdHJ5IHsgY2FsbGJhY2soYXNzZXJ0QWxsb3dlZCh1c2VyKSk7IH0KICAgIGNhdGNoIHsgc2lnbk91dChhdXRoKTsgY2FsbGJhY2sobnVsbCk7IH0KICB9KTsKfQpmdW5jdGlvbiBzdGF0ZVJlZih1c2VyKSB7CiAgYXNzZXJ0QWxsb3dlZCh1c2VyKTsKICByZXR1cm4gZG9jKGRiLCAndXNlcnMnLCB1c2VyLnVpZCwgJ2FwcCcsICdtYWluJyk7Cn0KZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGxvYWRDbG91ZFN0YXRlKHVzZXIpIHsKICBjb25zdCBzbmFwID0gYXdhaXQgZ2V0RG9jKHN0YXRlUmVmKHVzZXIpKTsKICBpZiAoIXNuYXAuZXhpc3RzKCkpIHJldHVybiB7IHN0YXRlOiBudWxsLCByZXZpc2lvbjogMCB9OwogIGNvbnN0IGRhdGEgPSBzbmFwLmRhdGEoKTsKICByZXR1cm4geyBzdGF0ZTogZGF0YS5zdGF0ZSA/PyBudWxsLCByZXZpc2lvbjogTnVtYmVyKGRhdGEucmV2aXNpb24gfHwgMCkgfTsKfQpmdW5jdGlvbiBjbG91ZFNhZmVTdGF0ZShpbnB1dCkgewogIC8vIFBob3RvcyByZW1haW4gb24gdGhlIGRldmljZS4gS2VlcGluZyBiYXNlNjQgcGhvdG9zIG91dCBhdm9pZHMgRmlyZXN0b3JlJ3MKICAvLyAxIE1pQiBkb2N1bWVudCBsaW1pdCBhbmQgYXZvaWRzIHJlcXVpcmluZyBDbG91ZCBTdG9yYWdlIC8gYSBiaWxsaW5nIHBsYW4uCiAgY29uc3Qgc3RhdGUgPSBzdHJ1Y3R1cmVkQ2xvbmUoaW5wdXQpOwogIGZvciAoY29uc3Qgd29yayBvZiBzdGF0ZS53b3JrcyB8fCBbXSkgd29yay5waG90b3MgPSBbXTsKICBmb3IgKGNvbnN0IHBheW1lbnQgb2Ygc3RhdGUucGF5bWVudHMgfHwgW10pIHBheW1lbnQucGhvdG8gPSAnJzsKICBjb25zdCBieXRlcyA9IG5ldyBUZXh0RW5jb2RlcigpLmVuY29kZShKU09OLnN0cmluZ2lmeShzdGF0ZSkpLmxlbmd0aDsKICBpZiAoYnl0ZXMgPiA4NTBfMDAwKSB0aHJvdyBuZXcgRXJyb3IoJ0Nsb3VkIHJlY29yZCBpcyB0b28gbGFyZ2UuIFBob3RvcyBhcmUgbG9jYWwtb25seTsgZXhwb3J0IGEgSlNPTiBiYWNrdXAgYW5kIHJlZHVjZSB1bnVzdWFsbHkgbGFyZ2UgdGV4dCBmaWVsZHMuJyk7CiAgcmV0dXJuIHN0YXRlOwp9CmV4cG9ydCBhc3luYyBmdW5jdGlvbiBzYXZlQ2xvdWRTdGF0ZSh1c2VyLCBpbnB1dCwgZXhwZWN0ZWRSZXZpc2lvbikgewogIGNvbnN0IHJlZiA9IHN0YXRlUmVmKHVzZXIpOwogIGNvbnN0IHNhZmVTdGF0ZSA9IGNsb3VkU2FmZVN0YXRlKGlucHV0KTsKICByZXR1cm4gcnVuVHJhbnNhY3Rpb24oZGIsIGFzeW5jIHR4ID0+IHsKICAgIGNvbnN0IHNuYXAgPSBhd2FpdCB0eC5nZXQocmVmKTsKICAgIGNvbnN0IGN1cnJlbnQgPSBzbmFwLmV4aXN0cygpID8gTnVtYmVyKHNuYXAuZGF0YSgpLnJldmlzaW9uIHx8IDApIDogMDsKICAgIGlmIChjdXJyZW50ICE9PSBOdW1iZXIoZXhwZWN0ZWRSZXZpc2lvbiB8fCAwKSkgewogICAgICBjb25zdCBlcnJvciA9IG5ldyBFcnJvcignQ0xPVURfQ09ORkxJQ1Q6IENsb3VkIGRhdGEgY2hhbmdlZCBvbiBhbm90aGVyIGRldmljZS4gUmVsb2FkIGNsb3VkIGRhdGEgYmVmb3JlIG1ha2luZyBmdXJ0aGVyIGNoYW5nZXMuJyk7CiAgICAgIGVycm9yLmNvZGUgPSAnQ0xPVURfQ09ORkxJQ1QnOwogICAgICB0aHJvdyBlcnJvcjsKICAgIH0KICAgIGNvbnN0IG5leHQgPSBjdXJyZW50ICsgMTsKICAgIHR4LnNldChyZWYsIHsgc3RhdGU6IHNhZmVTdGF0ZSwgcmV2aXNpb246IG5leHQsIHNjaGVtYVZlcnNpb246IDEsIHVwZGF0ZWRBdDogc2VydmVyVGltZXN0YW1wKCkgfSk7CiAgICByZXR1cm4gbmV4dDsKICB9KTsKfQo=');
-  $('syncNowBtn').onclick=()=>{if(cloudConflict)reloadCloud(true);else if(cloudDirty)syncCloud();else reloadCloud()};
+  $('syncNowBtn').onclick=()=>{if(cloudDirty)syncCloud();else reloadCloud()};
   $('logoutBtn').onclick=async()=>{if(cloudDirty&&!confirm('Some changes may not have synced. Sign out anyway?'))return;await cloudApi.logout();cloudUser=null;document.body.classList.remove('authenticated');setCloudStatus('Signed out');$('loginMessage').textContent='Signed out.'};
   cloudApi.watchLogin(async user=>{if(user&&!cloudUser){try{await activateUser(user)}catch(e){$('loginMessage').textContent=e.message||'Could not load your account data';$('loginMessage').classList.add('error')}}});
  }catch(e){console.error('Majuri Pro Firebase initialisation:',e);$('loginMessage').textContent='Firebase setup error: '+(e?.message||e);$('loginMessage').classList.add('error');throw e}
 }
 async function activateUser(user){cloudUser=user;$('accountEmail').textContent=user.email;document.body.classList.add('authenticated');await startMajuri();await reloadCloud()}
 cloudInitPromise=bootCloud().catch(error=>{console.error('Majuri Pro startup:',error);return null});
-window.addEventListener('online',()=>{if(cloudUser&&cloudDirty){setCloudStatus('Connection restored — syncing');scheduleCloudSync()}});
+window.addEventListener('online',()=>{if(cloudUser){setCloudStatus('Connection restored — syncing');if(!cloudDirty)reloadCloud();else scheduleCloudSync()}});
 // PWA/service worker disabled by request. Standard website only.
 </script>
 <!-- Firebase configuration and initialization are embedded in the cloud adapter above. --><div id="actionOverlay" role="dialog" aria-modal="true" aria-labelledby="actionTitle"><div class="action-dialog"><div class="symbol">!</div><h2 id="actionTitle">Confirm action</h2><p id="actionMessage">Are you sure?</p><div class="actions"><button class="danger" id="actionConfirm">Delete</button><button class="secondary" id="actionCancel">Cancel</button></div></div></div><div id="appToast" role="status"></div>
