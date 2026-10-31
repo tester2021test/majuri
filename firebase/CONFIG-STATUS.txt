@@ -1,0 +1,11 @@
+Firebase project configuration prepared from the user's supplied Web App config.
+Project ID: majuri-pro
+Approved Google account: vivekdn2504@gmail.com
+Access model: separate private user data (no shared project membership)
+Plan target: Firebase Spark; do not attach a billing account.
+
+IMPORTANT:
+- This file contains browser-side Firebase project configuration. The apiKey is not a server private key.
+- Never place Firebase Admin SDK service-account JSON or private keys in this website.
+- Authentication and Firestore Security Rules must be enabled and published before cloud access.
+- The existing Majuri Pro V2.3 page has not yet been integrated with the adapter. Do not assume cloud sync is active just because this config file exists.
