@@ -1,0 +1,10 @@
+{
+  "name": "Majuri Pro V2.4 Cloud Sync.2 \u2013 Home Interior Expense Tracker",
+  "short_name": "Majuri Pro",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f5f9",
+  "theme_color": "#172033",
+  "description": "Offline home interior and renovation work, purchases, contractor payments and project expense tracker",
+  "icons": []
+}
